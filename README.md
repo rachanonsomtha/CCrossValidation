@@ -12,4 +12,5 @@ error rate using the test and training data. The results are summarized in a ROC
 performance curves. 
 
 # Constructor CCrossValidation.LDA
-The arguments to the function include: \n test
+The arguments to the function include:  
+1- test
