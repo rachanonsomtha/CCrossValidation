@@ -35,3 +35,47 @@ prediction, performance, AUC and error rates are calculated.
 A simple function that plots the data using the ROCR library and its plot function. It plots the true positive rate, false positive 
 rate for both the cross validation and validation set results. The cross validation error bounds are based on 2 standard deviations.  
 
+# CVariableSelection
+Class to perform variable selection using Random Forests and Exhaustive subset selection, and plot the results
+
+# CVariableSelection.RandomForest
+Performs variable selection via Random forest using following steps:  
+1- Warn and check if number of variables is > 200 as it may take too long.  
+2- Checks if classification factor has 2 levels or not  
+NOTE: currently works on 2 level factors  
+3- Performs nested Random Forest iBoot number of times.  
+4- On each boot cycle the following steps are performed:  
+4a- Select indices of equal proprtions of both factor levels i.e. both classes
+4b- Take a sample of the data using these indices
+4c- Fit a random forest model 
+4d- Calculate variable importance score  
+5- Importance scores for each variable are a vector of size iBoot, take mean and standard deviation.  
+6- Calculate Coefficient of variation and split data into quantiles based on this COV  
+7- Save the results.  
+
+# plot.var.selection
+Generic function for the class CVariableSelection and calls the function based on type of object.  
+Will plot the variable importance scores with standard errors for the top 20 variables.
+
+# CVariableSelection.ReduceModel
+Uses exhaustive (or forward, backward) subset selection on test and training data in a nested manner (iBoot). Reports the results 
+in a matrix and plot.  
+The method works in following steps:  
+1- Outer loop for number of boot cycles.  
+2- Create test set on 30% of data and remaining is training set.  
+3- Uses leaps::regsubsets to fit the model.  
+4- Creates second nested loop based on number of variables.  
+4a- Gets coefficient of model of size i.  
+4b- Subsets the training and test data based on the variables in model of size i.  
+4c- Fits MASS:lda model on the training data.  
+4d- Predicts on test and training data for corresponding error rates.  
+5- Goes out to outer loop and saves training and test error rates for that boot cycle and performs another boot.  
+6- Finally test and training error rate matrices are stored.  
+
+# plot.var.selection
+Plots the error rates (y axis) vs number of variables (x axis) for test and training data.
+
+# CVariableSelection.ReduceModel.getMinModel
+Returns the minimum sized model for the specificed size.
+
+

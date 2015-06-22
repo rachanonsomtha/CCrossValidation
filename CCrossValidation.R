@@ -185,5 +185,250 @@ setMethod('plot.cv.performance', signature='CCrossValidation.LDA', definition = 
 })
 
 
+######################################################################################
+## CVariableSelection
+## classes to perform variable selection using random forest or step-wise selection
+
+#Name: CVariableSelection
+#Desc: Data holder for variable selection class, 
+#NOTE: works on binary classification problems
+
+# declaration
+setClass('CVariableSelection', slots=list(dfData='data.frame', fGroups='factor'))
+
+# constructor
+CVariableSelection = function(data, groups){
+  # the constructor only works on a 2 class problem, if 
+  # number of levels greater than 2 then stop
+  if (length(levels(groups)) != 2){
+    stop('Number of levels should be only 2 for a 2 class comparison')
+  }
+  ## create the object
+  ob = new('CVariableSelection', dfData=data, fGroups=groups)
+  return(ob)
+}
+
+
+#### Create subclass for variable selection
+#Name: CVariableSelection.RandomForest
+#Desc: The class takes a set of varialbes and performs a nested cross validation on samples of the data
+#      each time selecting equal proportions from both classes, fitting a random forest and saving the 
+#      variable importance measure. The variable importance is summarized by its overall mean and sd
+
+setClass('CVariableSelection.RandomForest', slots=list(dfImportance='data.frame', iBoot='numeric'),
+         contains='CVariableSelection')
+
+
+# constructor
+CVariableSelection.RandomForest = function(data, groups, boot.num=100, big.warn=T){
+  # creat the CVariableSelection object and perform error checks
+  oCV = CVariableSelection(data, groups)
+  
+  # check number of dimensions for the data, as performing a bootstrap on
+  # larger than 200 variables may not be feasible
+  if (big.warn && ncol(data) > 200) {
+    stop('Number of varialbes is larger than 200, it may take long to finish calculations, reduce dimensions or set big.warn=F')
+  }
+  
+  ###### Nested random forest
+  dfData.full = data.frame(data, fGroups=groups)
+  iBoot = boot.num
+  cLevels = levels(groups)
+  ## as the 2 class proportions are not equal, fit random forest multiple times on random samples
+  ## containing equal proportions of both classes and check variable importance measures
+  # fit random forests multiple times
+  # store results 
+  lVarImp = vector('list', iBoot)
+  for (i in 1:iBoot) {
+    # get indices of the particular factors in data table
+    ind.o = which(dfData.full$fGroups == cLevels[1])
+    ind.p = which(dfData.full$fGroups == cLevels[2])
+    # take the sample of equal size from both groups
+    # where size = minimum size from the 2 groups
+    iSample.size = min(c(length(ind.p), length(ind.o)))
+    ind.o.s = sample(ind.o, size = iSample.size, replace = F)
+    ind.p.s = sample(ind.p, size=iSample.size, replace=F)
+    # join the sample indices together
+    ind = sample(c(ind.o.s, ind.p.s), replace=F)
+    # take sample from the full dataset
+    dfData = dfData.full[ind,]
+    # fit model
+    fit.rf = randomForest(fGroups ~., data=dfData, importance = TRUE, ntree = 500)
+    # get variables importance
+    df = importance(fit.rf)
+    df = df[order(df[,'MeanDecreaseAccuracy'], decreasing = T),]
+    # put in list
+    lVarImp[[i]] = df
+  } # for
+  
+  ## put data for each boot of each variable together in a dataframe
+  df = NULL
+  for (i in 1:iBoot) df = rbind(df, lVarImp[[i]])
+  # convert rownames i.e. gene names to factors
+  f = as.factor(rownames(df))
+  # calculate mean and sd for each gene
+  ivMean = tapply(df[,'MeanDecreaseAccuracy'], f, mean)
+  ivSD = tapply(df[,'MeanDecreaseAccuracy'], f, sd)
+  df = as.data.frame(df)
+  df$Symbol = rownames(df)
+  dfRF.boot = df
+  # calculate coefficient of variation
+  cv = ivSD/abs(ivMean)
+  # split data into groups based on cv
+  g = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T)
+  gl = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T, labels = 0:9)
+  dfRF.boot.stats = data.frame(ivMean, ivSD, cv, groups=g, group.lab=gl)
+  
+  # create the new object
+  ob = new('CVariableSelection.RandomForest', dfImportance=dfRF.boot.stats, iBoot=iBoot, oCV)
+  return(ob)
+}
+
+############ functions
+
+setGeneric('plot.var.selection', def = function(ob, ...) standardGeneric('plot.var.selection'))
+setMethod('plot.var.selection', signature='CVariableSelection.RandomForest', definition = function(ob, ...){
+  # plot the variable importance as bar plots with 
+  # confidence intervals
+  dfDat = ob@dfImportance
+  dfDat = dfDat[order(dfDat$ivMean, decreasing = T),]
+  i = nrow(dfDat)
+  if (i > 20) i = 1:20 else i = 1:nrow(dfDat)
+  dfDat = dfDat[i,]
+  mBar = matrix(dfDat$ivMean, nrow=1)
+  colnames(mBar) = rownames(dfDat)
+  p.old = par(mar=c(6,3,4,2)+0.1)
+  y = c(0, max(ceiling(mBar)))
+  l2 = barplot(mBar, las=2, xaxt='n', col='grey', main='Top Variables', ylim=y, ...)
+  axis(1, at = l2, labels = colnames(mBar), tick = F, las=2, cex.axis=0.7 )
+  # calculate standard errors
+  ## function to simulate  
+  f_sim_ci = function(m, s){
+    m = rnorm(n = 1000, m, s)
+    return(quantile(m, c(0.025, 0.975)))
+  }
+  # draw error bars
+  for (i in 1:length(l2)){
+    l = l2[i]
+    ## make error bars
+    # get standard error and simulate ci
+    se = dfDat[i,'ivSD']/sqrt(ob@iBoot)
+    m = f_sim_ci(mBar[,i], se)
+    segments(l, y0 = m[1], l, y1 = m[2], lwd=2)
+    segments(l-0.1, y0 = m[1], l+0.1, y1 = m[1], lwd=2)
+    segments(l-0.1, y0 = m[2], l+0.1, y1 = m[2], lwd=2)
+  }  
+  par(p.old)
+})
+
+
+## data accessor functions
+CVariableSelection.RandomForest.getVariables = function(ob){
+  dfDat = ob@dfImportance
+  dfDat = dfDat[order(dfDat$ivMean, decreasing = T),]
+  return(dfDat)
+}
+
+
+#Name: CVariableSelection.ReduceModel
+#Desc: The class takes a set of varialbes and performs a variable subset selection with test and training set
+
+setClass('CVariableSelection.ReduceModel', slots=list(mTest='matrix', mTrain='matrix', iBoot='numeric'),
+         contains='CVariableSelection')
+
+
+CVariableSelection.ReduceModel = function(data, groups, boot.num=1000, cvMethod='exhaustive'){
+  # require package
+  if (!require(leaps) || !require(MASS)) stop('Package leaps and MASS required')
+  # creat the CVariableSelection object and perform error checks
+  oCV = CVariableSelection(data, groups)
+  
+  # split the data into test and training sets
+  # and perform variable selection
+  iBoot = boot.num
+  # matrix to hold results for each boot cycle
+  mTrain = matrix(NA, nrow = ncol(data), ncol = iBoot)
+  mTest = matrix(NA, nrow = ncol(data), ncol = iBoot)
+  for(o in 1:iBoot){
+    dfData.train = data
+    dfData.train$fGroups = groups
+    # create a test set on a percentage the data
+    test = sample(1:nrow(dfData.train), size =nrow(dfData.train) * 0.30, replace = F)
+    dfData.test = dfData.train[test,]
+    dfData.train = dfData.train[-test,]
+    # fit model
+    reg = regsubsets(fGroups ~ ., data=dfData.train, nvmax = ncol(data), method=cvMethod)
+    # test for validation errors in the test set
+    ivCV.train = rep(NA, length=ncol(data))
+    ivCV.test = rep(NA, length=ncol(data))
+    for (i in 1:ncol(data)){
+      # get the variables in each subset
+      n = names(coef(reg, i))[-1]
+      n = c(n, 'fGroups')
+      dfDat.train = dfData.train[,colnames(dfData.train) %in% n]
+      dfDat.test = dfData.test[,colnames(dfData.test) %in% n]
+      # fit the lda model on training dataset
+      fit.lda = lda(fGroups ~ ., data=dfDat.train)
+      # test error rate on test dataset
+      p = predict(fit.lda, newdata=dfDat.test)
+      # calculate test error 
+      ivCV.test[i] = mean(p$class != dfDat.test$fGroups)  
+      # calculate training error
+      p = predict(fit.lda, newdata=dfDat.train)
+      # calculate error
+      ivCV.train[i] = mean(p$class != dfDat.train$fGroups)  
+    }
+    mTrain[,o] = ivCV.train
+    mTest[,o] = ivCV.test
+    print(paste('boot cycle:', o))
+  }
+  # save data
+  mTrain = t(mTrain)
+  mTest = t(mTest)
+  ob = new('CVariableSelection.ReduceModel', mTest=mTest, mTrain=mTrain, iBoot=iBoot, oCV)
+}
+
+#### functions 
+setMethod('plot.var.selection', signature='CVariableSelection.ReduceModel', definition = function(ob, ...){
+  # plot the test and training error agasint number of variables
+  tr = colMeans(ob@mTrain)
+  te = colMeans(ob@mTest)  
+  m = cbind(tr, te)
+  matplot(1:nrow(m), m, type='b', pch=20, lty = 1, lwd=2, col=1:2, xaxt='n', xlab='No. of Variables', ylab='Error Rate')
+  legend('topright', legend = c('Train', 'Test'), fill=1:2)
+  axis(1, at = 1:nrow(m), las=2)
+})
+
+
+# accessor functions
+CVariableSelection.ReduceModel.getMinModel = function(ob, size){
+  # return the model of the required size
+  i = size
+  # refit subset using i number of variables on all data
+  dfData = ob@dfData
+  dfData$fGroups = ob@fGroups
+  reg = regsubsets(fGroups ~ ., data=dfData, nvmax = ncol(ob@dfData), method='exhaustive')
+  return(names(coef(reg, i))[-1])
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
