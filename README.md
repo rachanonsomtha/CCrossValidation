@@ -29,12 +29,24 @@ k folds and cross validation using lda is performed. The results for each boot s
 performance and Area under curve objects are calculated using ROCR library and a cross validation error rate is calculated.  
   
 f_validation: This is a simpler function and fits the LDA model to the training data and makes a prediction on the test data. The
-prediction, performance, AUC and error rates are calculated.
+prediction, performance, AUC and error rates are calculated.  
+  
+# Class CCrossValidation.Tree
+Uses the Tree model from tree package to perform a nested k fold cross validation on the training data, and a test vs validation
+error rate using the test and training data. The results are summarized in a ROCR object, which can be plotted along with the
+performance curves. It also performs cost complexity pruning using cv.tree function and uses the minimum sized tree for nested
+cross validation and test vs performance calculations.
+
+# Constructor CCrossValidation.Tree
+Very similar to CCrossValidation.Tree function. The main difference is in the f_kfoldcv function, where an additional step is performed, i.e. tree pruning. However for tree pruning a hack is implemented as the cv.tree function can not find the object due to
+the way variable scoping is done in R. It creates a temporary global variable of the test data and removes that each time the 
+pruning is completed. (read here for some details read here for details: http://cran.r-project.org/web/packages/car/vignettes/embedding.pdf). 
 
 # plot.cv.performance
 A simple function that plots the data using the ROCR library and its plot function. It plots the true positive rate, false positive 
 rate for both the cross validation and validation set results. The cross validation error bounds are based on 2 standard deviations.  
-
+  
+The tree based cutoffs for ROC curve are sharper than LDA, so you will see a less wiggly line.
 # CVariableSelection
 Class to perform variable selection using Random Forests and Exhaustive subset selection, and plot the results
 

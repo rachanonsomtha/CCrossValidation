@@ -5,8 +5,8 @@
 
 
 library(methods)
-if (!require(MASS) || !require(ROCR)) {
-  stop('Libraries MASS and ROCR required to use this class')
+if (!require(MASS) || !require(ROCR) || !require(tree) || !require(randomForest)) {
+  stop('Libraries MASS, tree, randomForest and ROCR required to use this class')
 }
 
 #############################################
@@ -206,6 +206,7 @@ CCrossValidation.Tree = function(test.dat, train.dat, test.groups, train.groups,
   oCv.tree = new('CCrossValidation.Tree', iBoot=boot.num, oPred.cv=NULL, oPerf.cv=NULL, oAuc.cv=NULL,
                 oPred.val=NULL, oPerf.val=NULL, oAuc.val=NULL, iFolds=k.fold, ivCV.error.rate=NULL, iTest.error=NULL, oCv)
   
+
   # Name: f_kfoldcv
   # Desc: internal function to perform k fold cross validation
   f_kfoldcv = function(ob){
@@ -246,7 +247,19 @@ CCrossValidation.Tree = function(test.dat, train.dat, test.groups, train.groups,
           # check if fold too small to fit model
           if (nrow(dfData[folds != i,]) < 3) next
           # fit model on data not in fold
-          fit = tree(fGroups ~ ., data=dfData[folds != i,])
+          # first select optimal tree size by pruning tree
+          df.prune.niazi = dfData[folds != i,]
+          # assign this variable to global environment as cv.tree function
+          # can not find it
+          assign('df.prune.niazi', df.prune.niazi, envir = .GlobalEnv)
+          fit = tree(fGroups ~ ., data=df.prune.niazi)
+          cv.fit.tree = cv.tree(fit, FUN = prune.misclass)
+          min.tree = which.min(cv.fit.tree$dev)
+          min.tree = cv.fit.tree$size[min.tree]
+          # get the minimum sized tree
+          fit = prune.misclass(fit, best = min.tree)
+          # remove from global environment
+          remove('df.prune.niazi', envir = .GlobalEnv)
           # predict on data in fold
           pred = predict(fit, newdata = dfData[folds == i,], type='vector')[,ob@cPred]
           name = paste('pred',oo, o, i,sep='.' )
@@ -284,8 +297,22 @@ CCrossValidation.Tree = function(test.dat, train.dat, test.groups, train.groups,
     
     dfData.test = ob@dfTest
     dfData.test$fGroups = ob@fGroups.test
+    ## note: this hack is because of how R performs scoping
+    ## read here for details: http://cran.r-project.org/web/packages/car/vignettes/embedding.pdf
+    df.prune.niazi = dfData.train
     # fit the model on the training data set
-    fit = tree(fGroups ~ ., data=dfData.train)
+    # assign this variable to global environment as cv.tree function
+    # can not find it
+    assign('df.prune.niazi', df.prune.niazi, envir = .GlobalEnv)
+    fit = tree(fGroups ~ ., data=df.prune.niazi)
+    # prune the tree 
+    cv.fit.tree = cv.tree(fit, FUN = prune.misclass)
+    min.tree = which.min(cv.fit.tree$dev)
+    min.tree = cv.fit.tree$size[min.tree]
+    # get the minimum sized tree
+    fit = prune.misclass(fit, best = min.tree)
+    # remove from global environment
+    remove('df.prune.niazi', envir = .GlobalEnv)
     # predict on data in fold
     pred = predict(fit, newdata = dfData.test, type='vector')[,ob@cPred]
     ivPred = pred
@@ -332,15 +359,6 @@ setMethod('plot.cv.performance', signature='CCrossValidation.Tree', definition =
   err.t = paste('Val Error=', round(ob@iTest.error, 2))
   legend(legend.pos, legend = c(auc.cv, cv.err, auc.t, err.t))
 })
-
-
-
-
-
-
-
-
-
 
 
 ######################################################################################
