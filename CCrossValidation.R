@@ -577,13 +577,13 @@ setMethod('plot.var.selection', signature='CVariableSelection.ReduceModel', defi
 
 
 # accessor functions
-CVariableSelection.ReduceModel.getMinModel = function(ob, size){
+CVariableSelection.ReduceModel.getMinModel = function(ob, size, cvMethod='exhaustive'){
   # return the model of the required size
   i = size
   # refit subset using i number of variables on all data
   dfData = ob@dfData
   dfData$fGroups = ob@fGroups
-  reg = regsubsets(fGroups ~ ., data=dfData, nvmax = ncol(ob@dfData), method='exhaustive')
+  reg = regsubsets(fGroups ~ ., data=dfData, nvmax = ncol(ob@dfData), method=cvMethod)
   return(names(coef(reg, i))[-1])
 }
 
