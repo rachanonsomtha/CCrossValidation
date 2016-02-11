@@ -200,6 +200,28 @@ setMethod('plot.cv.performance', signature='CCrossValidation.LDA', definition = 
   legend(legend.pos, legend = c(auc.cv, cv.err, auc.t, err.t))
 })
 
+#### Data accessor functions
+setGeneric('getAUCVector', def = function(ob, ...) standardGeneric('getAUCVector'))
+setMethod('getAUCVector', signature='CCrossValidation.LDA', definition = function(ob, ...){
+  # cross validation AUC vector
+  auc = performance(ob@oPred.cv, 'auc')
+  return(unlist(auc@y.values))
+})
+
+
+setGeneric('getCutoffTprFprCrossValidation', def = function(ob, ...) standardGeneric('getCutoffTprFprCrossValidation'))
+setMethod('getCutoffTprFprCrossValidation', signature='CCrossValidation.LDA', definition = function(ob, ...){
+  # cross validation AUC vector
+  perf = ob@oPerf.cv
+  cutoffs = do.call(cbind, perf@alpha.values)
+  tpr = do.call(cbind, perf@y.values)
+  fpr = do.call(cbind, perf@x.values)
+  c = apply(cutoffs, 1, median)
+  t = apply(tpr, 1, median)
+  f = apply(fpr, 1, median)
+  mRet = data.frame(cutoff=c, tpr=t, fpr=f, rate=t/f)
+  return(mRet)
+})
 
 
 ##########################################
@@ -374,6 +396,15 @@ setMethod('plot.cv.performance', signature='CCrossValidation.Tree', definition =
   auc.t = paste('Val AUC=', round(mean(as.numeric(auc@y.values)), digits = 2))
   err.t = paste('Val Error=', round(ob@iTest.error, 2))
   legend(legend.pos, legend = c(auc.cv, cv.err, auc.t, err.t))
+})
+
+
+## data acessor functions
+# setGeneric('getAUCVector', def = function(ob, ...) standardGeneric('getAUCVector'))
+setMethod('getAUCVector', signature='CCrossValidation.Tree', definition = function(ob, ...){
+  # cross validation AUC vector
+  auc = performance(ob@oPred.cv, 'auc')
+  return(unlist(auc@y.values))
 })
 
 

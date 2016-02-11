@@ -42,11 +42,27 @@ Very similar to CCrossValidation.Tree function. The main difference is in the f_
 the way variable scoping is done in R. It creates a temporary global variable of the test data and removes that each time the 
 pruning is completed. (read here for some details read here for details: http://cran.r-project.org/web/packages/car/vignettes/embedding.pdf). 
 
+# Generic functions
 # plot.cv.performance
 A simple function that plots the data using the ROCR library and its plot function. It plots the true positive rate, false positive 
 rate for both the cross validation and validation set results. The cross validation error bounds are based on 2 standard deviations.  
   
-The tree based cutoffs for ROC curve are sharper than LDA, so you will see a less wiggly line.
+The tree based cutoffs for ROC curve are sharper than LDA, so you will see a less wiggly line.  
+
+# getAUCVector
+ARGS: object of class CCrossValidation.LDA or CCrossValidation.Tree  
+RETS: vector with length equal to number of boot cycles  
+Returns the cross validation AUC score which can be used to calculate the quantiles and other statistics.  
+
+# getCutoffTprFprCrossValidation  
+ARGS: object of class CCrossValidation.LDA  
+Currently it does not work with CCrossValidation.Tree class object, due to different lengths of vectors returned on each bootstrap, and will be eventually added.  
+RETS: data.frame with 4 variables: (median of the boot strap vector)  
+1- cutoff posterior probability for predicted class  
+2- true positive rate 
+3- false positive rate  
+4- rate of change of the function slope, i.e. tpr/fpr. Can be used for selecting points where rate of change is slow or fast.  
+
 # CVariableSelection
 Class to perform variable selection using Random Forests and Exhaustive subset selection, and plot the results
 
@@ -67,7 +83,10 @@ NOTE: currently works on 2 level factors
 
 # plot.var.selection
 Generic function for the class CVariableSelection and calls the function based on type of object.  
-Will plot the variable importance scores with standard errors for the top 20 variables.
+Will plot the variable importance scores with standard errors for the top 20 variables.  
+
+# CVariableSelection.RandomForest.getVariables  
+Returns the scores for the variables along with bootstrap means, standard deviations and coefficient of variations.
 
 # CVariableSelection.ReduceModel
 Uses exhaustive (or forward, backward) subset selection on test and training data in a nested manner (iBoot). Reports the results 
