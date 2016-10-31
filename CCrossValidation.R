@@ -501,6 +501,10 @@ CVariableSelection.RandomForest = function(data, groups, boot.num=100, big.warn=
   # calculate coefficient of variation
   cv = ivSD/abs(ivMean)
   # split data into groups based on cv
+  ## NOTE: Implement an error trycatch here as this is the type of 
+  ## error we get here very rarely
+  # Error in quantile.default(cv, 0:10/10) : 
+  #   missing values and NaN's not allowed if 'na.rm' is FALSE
   g = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T)
   gl = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T, labels = 0:9)
   dfRF.boot.stats = data.frame(ivMean, ivSD, cv, groups=g, group.lab=gl)
