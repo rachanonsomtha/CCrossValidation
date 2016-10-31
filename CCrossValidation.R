@@ -414,16 +414,19 @@ setMethod('getAUCVector', signature='CCrossValidation.Tree', definition = functi
 
 #Name: CVariableSelection
 #Desc: Data holder for variable selection class, 
-#NOTE: works on binary classification problems
+#NOTE: works on binary classification problems mainly, and some numeric response problems
 
 # declaration
-setClass('CVariableSelection', slots=list(dfData='data.frame', fGroups='factor'))
+setClass('CVariableSelection', slots=list(dfData='data.frame', fGroups='ANY'))
 
 # constructor
 CVariableSelection = function(data, groups){
-  # the constructor only works on a 2 class problem, if 
+  # the constructor only works on a 2 class problem or continuous variables, if 
   # number of levels greater than 2 then stop
-  if (length(levels(groups)) != 2){
+  if (!is.numeric(groups) && !is.factor(groups)) {
+    stop('Response variable should be numeric or factor with 2 levels')
+  }
+  if (is.factor(groups) && length(levels(groups)) != 2){
     stop('Number of levels should be only 2 for a 2 class comparison')
   }
   ## create the object
@@ -560,9 +563,10 @@ setClass('CVariableSelection.ReduceModel', slots=list(mTest='matrix', mTrain='ma
          contains='CVariableSelection')
 
 
-CVariableSelection.ReduceModel = function(data, groups, boot.num=1000, cvMethod='exhaustive'){
+CVariableSelection.ReduceModel = function(data, response, boot.num=1000, cvMethod='exhaustive'){
   # require package
   if (!require(leaps) || !require(MASS)) stop('Package leaps and MASS required')
+  groups = response
   # creat the CVariableSelection object and perform error checks
   oCV = CVariableSelection(data, groups)
   
@@ -588,18 +592,42 @@ CVariableSelection.ReduceModel = function(data, groups, boot.num=1000, cvMethod=
       # get the variables in each subset
       n = names(coef(reg, i))[-1]
       n = c(n, 'fGroups')
-      dfDat.train = dfData.train[,colnames(dfData.train) %in% n]
-      dfDat.test = dfData.test[,colnames(dfData.test) %in% n]
-      # fit the lda model on training dataset
-      fit.lda = lda(fGroups ~ ., data=dfDat.train)
-      # test error rate on test dataset
-      p = predict(fit.lda, newdata=dfDat.test)
-      # calculate test error 
-      ivCV.test[i] = mean(p$class != dfDat.test$fGroups)  
-      # calculate training error
-      p = predict(fit.lda, newdata=dfDat.train)
-      # calculate error
-      ivCV.train[i] = mean(p$class != dfDat.train$fGroups)  
+      cn = colnames(dfData.train)
+      # as dummy codings for categorical variables adds a postfix level
+      # to the original variable name, e.g. MaleY where Y is the postfix added to Male
+      # we want to extract the original variable name, hence th convulated way of getting
+      # the variable names
+      f = sapply(cn, function(x) any(startsWith(n, x)))
+      dfDat.train = dfData.train[,cn[f]]
+      dfDat.test = dfData.test[,cn[f]]
+      # if response variable is a 2 class categorical variable 
+      # then use lda else use the function
+      if (is.factor(oCV@fGroups)){
+        # fit the lda model on training dataset
+        fit.lda = lda(fGroups ~ ., data=dfDat.train)
+        # test error rate on test dataset
+        p = predict(fit.lda, newdata=dfDat.test)
+        # calculate test error 
+        ivCV.test[i] = mean(p$class != dfDat.test$fGroups)  
+        # calculate training error
+        p = predict(fit.lda, newdata=dfDat.train)
+        # calculate error
+        ivCV.train[i] = mean(p$class != dfDat.train$fGroups)  
+      } else if (is.numeric(oCV@fGroups)) {
+        # test error rate on test dataset
+        coefi = coef(reg, i)
+        # model matrix for test data
+        test.mat = model.matrix(fGroups ~ ., data=dfData.test)
+        # calculate test error 
+        p = test.mat[,names(coefi)]%*%coefi
+        ivCV.test[i] = mean((dfData.test$fGroups-p)^2)
+        # calculate training error
+        # model matrix for training data
+        train.mat = model.matrix(fGroups ~ ., data=dfData.train)
+        # calculate train error 
+        p = train.mat[,names(coefi)]%*%coefi
+        ivCV.train[i] = mean((dfData.train$fGroups-p)^2)
+      }
     }
     mTrain[,o] = ivCV.train
     mTest[,o] = ivCV.test
@@ -631,7 +659,15 @@ CVariableSelection.ReduceModel.getMinModel = function(ob, size, cvMethod='exhaus
   dfData = ob@dfData
   dfData$fGroups = ob@fGroups
   reg = regsubsets(fGroups ~ ., data=dfData, nvmax = ncol(ob@dfData), method=cvMethod)
-  return(names(coef(reg, i))[-1])
+  #return(names(coef(reg, i))[-1])
+  n = names(coef(reg, i))[-1]
+  cn = colnames(dfData)
+  # as dummy codings for categorical variables adds a postfix level
+  # to the original variable name, e.g. MaleY where Y is the postfix added to Male
+  # we want to extract the original variable name, hence th convulated way of getting
+  # the variable names
+  f = sapply(cn, function(x) any(startsWith(n, x)))
+  return(cn[f])
 }
 
 
