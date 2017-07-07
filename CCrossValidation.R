@@ -531,7 +531,9 @@ CVariableSelection.RandomForest = function(data, groups, boot.num=100, big.warn=
   gl = tryCatch(getgl(cv), error=function(e) NULL)
   # g = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T)
   # gl = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T, labels = 0:9)
-  dfRF.boot.stats = data.frame(ivMean, ivSD, cv, groups=g, group.lab=gl)
+  dfRF.boot.stats = data.frame(ivMean, ivSD, cv)
+  dfRF.boot.stats$groups= g
+  dfRF.boot.stats$group.lab=gl
   
   # create the new object
   ob = new('CVariableSelection.RandomForest', dfImportance=dfRF.boot.stats, iBoot=iBoot, oCV)
