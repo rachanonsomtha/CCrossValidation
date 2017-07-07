@@ -525,8 +525,12 @@ CVariableSelection.RandomForest = function(data, groups, boot.num=100, big.warn=
   ## error we get here very rarely
   # Error in quantile.default(cv, 0:10/10) : 
   #   missing values and NaN's not allowed if 'na.rm' is FALSE
-  g = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T)
-  gl = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T, labels = 0:9)
+  getg = function(cv) cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T)
+  getgl = function(cv) cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T, labels = 0:9)
+  g = tryCatch(getg(cv), error=function(e) NULL)
+  gl = tryCatch(getgl(cv), error=function(e) NULL)
+  # g = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T)
+  # gl = cut(cv, breaks = quantile(cv, 0:10/10), include.lowest = T, labels = 0:9)
   dfRF.boot.stats = data.frame(ivMean, ivSD, cv, groups=g, group.lab=gl)
   
   # create the new object
