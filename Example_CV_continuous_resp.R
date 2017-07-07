@@ -18,6 +18,11 @@ g = Hitters$Salary
 d = Hitters[,-19]
 str(d)
 
+r = CVariableSelection.RandomForest(d, g)
+df = CVariableSelection.RandomForest.getVariables(r)
+head(df)
+plot.var.selection(r)
+
 o = CVariableSelection.ReduceModel(d, g, 100)
 plot.var.selection(o)
 

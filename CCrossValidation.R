@@ -459,45 +459,65 @@ CVariableSelection.RandomForest = function(data, groups, boot.num=100, big.warn=
   ###### Nested random forest
   dfData.full = data.frame(data, fGroups=groups)
   iBoot = boot.num
-  cLevels = levels(groups)
+  ## check if variable continuous or categoriacal
+  cLevels = NULL;
+  if (is.numeric(groups)) cLevels = NA else cLevels = levels(groups)
+  
+  
+  #### if variable is 2 class categorical
   ## as the 2 class proportions are not equal, fit random forest multiple times on random samples
   ## containing equal proportions of both classes and check variable importance measures
   # fit random forests multiple times
   # store results 
   lVarImp = vector('list', iBoot)
+  ind = NULL
   for (i in 1:iBoot) {
-    # get indices of the particular factors in data table
-    ind.o = which(dfData.full$fGroups == cLevels[1])
-    ind.p = which(dfData.full$fGroups == cLevels[2])
-    # take the sample of equal size from both groups
-    # where size = minimum size from the 2 groups
-    iSample.size = min(c(length(ind.p), length(ind.o)))
-    ind.o.s = sample(ind.o, size = iSample.size, replace = F)
-    ind.p.s = sample(ind.p, size=iSample.size, replace=F)
-    # join the sample indices together
-    ind = sample(c(ind.o.s, ind.p.s), replace=F)
+    ## if response variable is categorical or numeric
+    if (is.factor(dfData.full$fGroups)){
+      # get indices of the particular factors in data table
+      ind.o = which(dfData.full$fGroups == cLevels[1])
+      ind.p = which(dfData.full$fGroups == cLevels[2])
+      # take the sample of equal size from both groups
+      # where size = minimum size from the 2 groups
+      iSample.size = min(c(length(ind.p), length(ind.o)))
+      ind.o.s = sample(ind.o, size = iSample.size, replace = F)
+      ind.p.s = sample(ind.p, size=iSample.size, replace=F)
+      # join the sample indices together
+      ind = sample(c(ind.o.s, ind.p.s), replace=F)
+    } else {ind = 1:nrow(dfData.full)}
     # take sample from the full dataset
     dfData = dfData.full[ind,]
     # fit model
     fit.rf = randomForest(fGroups ~., data=dfData, importance = TRUE, ntree = 500)
     # get variables importance
     df = importance(fit.rf)
-    df = df[order(df[,'MeanDecreaseAccuracy'], decreasing = T),]
+    ## get the appropriate variable based on if 
+    ## it is a classification or regression problem
+    if (is.factor(dfData$fGroups)) {
+      df = df[order(df[,'MeanDecreaseAccuracy'], decreasing = T),]
+    } else df = df[order(df[,'%IncMSE'], decreasing = T),]
     # put in list
     lVarImp[[i]] = df
   } # for
   
   ## put data for each boot of each variable together in a dataframe
-  df = NULL
-  for (i in 1:iBoot) df = rbind(df, lVarImp[[i]])
-  # convert rownames i.e. gene names to factors
+  # df = NULL
+  # for (i in 1:iBoot) df = rbind(df, lVarImp[[i]])
+  df = do.call(rbind, lVarImp)
+  # convert rownames i.e. variable names to factors
   f = as.factor(rownames(df))
-  # calculate mean and sd for each gene
-  ivMean = tapply(df[,'MeanDecreaseAccuracy'], f, mean)
-  ivSD = tapply(df[,'MeanDecreaseAccuracy'], f, sd)
-  df = as.data.frame(df)
-  df$Symbol = rownames(df)
-  dfRF.boot = df
+  # calculate mean and sd for each variable
+  ivMean = NULL; ivSD = NULL;
+  if (is.factor(dfData.full$fGroups)) {
+    ivMean = tapply(df[,'MeanDecreaseAccuracy'], f, mean)
+    ivSD = tapply(df[,'MeanDecreaseAccuracy'], f, sd)
+  } else {
+    ivMean = tapply(df[,'%IncMSE'], f, mean)
+    ivSD = tapply(df[,'%IncMSE'], f, sd)
+  }
+  # df = as.data.frame(df)
+  # df$Symbol = rownames(df)
+  # dfRF.boot = df
   # calculate coefficient of variation
   cv = ivSD/abs(ivMean)
   # split data into groups based on cv
