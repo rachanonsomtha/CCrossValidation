@@ -68,6 +68,12 @@ plot.cv.performance(oCV)
 auc = getAUCVector(oCV)
 
 
+# create the cross validation object
+oCV.s = CCrossValidation.StanBern(dfData[test,-3], dfData[-test, -3], fGroups[test], fGroups[-test], level.predict = 'Pred',
+                           boot.num = 3, k.fold = 5, ncores = 2, nchains = 2) 
+
+plot.cv.performance(oCV.s)
+
 
 
 
